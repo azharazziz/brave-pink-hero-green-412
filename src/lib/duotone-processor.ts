@@ -26,7 +26,7 @@ const enhanceContrast = (value: number): number => {
   }
 };
 
-// Halftone raster effect function - screen printing style with solid blocks
+// Newspaper halftone effect function - fine dots with angled screen
 const applyHalftoneEffect = (
   ctx: CanvasRenderingContext2D,
   imageData: Uint8ClampedArray,
@@ -37,33 +37,53 @@ const applyHalftoneEffect = (
   minLuminance: number,
   luminanceRange: number
 ) => {
-  const cellSize = 12; // Size of each raster cell
-  const maxDotSize = cellSize * 0.85; // Maximum dot diameter
-  const shadowThreshold = 0.2; // Below this = solid shadow
-  const highlightThreshold = 0.8; // Above this = solid highlight
+  const cellSize = 6; // Smaller cells for finer newspaper effect
+  const maxDotSize = cellSize * 0.95; // Nearly full cell size
+  const angle = Math.PI / 6; // 30 degree rotation for newspaper effect
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
   
-  // Create raster pattern with regular grid
-  for (let gridY = 0; gridY < Math.ceil(height / cellSize); gridY++) {
-    for (let gridX = 0; gridX < Math.ceil(width / cellSize); gridX++) {
-      const startX = gridX * cellSize;
-      const startY = gridY * cellSize;
-      const endX = Math.min(startX + cellSize, width);
-      const endY = Math.min(startY + cellSize, height);
+  // Set highlight color for dots
+  ctx.fillStyle = `rgb(${highlightColor.r}, ${highlightColor.g}, ${highlightColor.b})`;
+  
+  // Calculate rotated grid bounds
+  const diagonal = Math.sqrt(width * width + height * height);
+  const gridSize = Math.ceil(diagonal / cellSize) + 2;
+  
+  // Create angled halftone pattern like newspaper
+  for (let gridY = -gridSize; gridY < gridSize; gridY++) {
+    for (let gridX = -gridSize; gridX < gridSize; gridX++) {
+      // Calculate rotated grid position
+      const rotatedX = gridX * cellSize * cos - gridY * cellSize * sin;
+      const rotatedY = gridX * cellSize * sin + gridY * cellSize * cos;
       
-      // Sample luminance in this cell
+      // Center position in original image coordinates
+      const centerX = rotatedX + width / 2;
+      const centerY = rotatedY + height / 2;
+      
+      // Skip if center is outside image bounds
+      if (centerX < 0 || centerX >= width || centerY < 0 || centerY >= height) continue;
+      
+      // Sample area around center for luminance
       let totalLuminance = 0;
       let sampleCount = 0;
+      const sampleRadius = Math.max(1, Math.floor(cellSize / 2));
       
-      for (let y = startY; y < endY; y++) {
-        for (let x = startX; x < endX; x++) {
-          const pixelIndex = (y * width + x) * 4;
-          const r = imageData[pixelIndex];
-          const g = imageData[pixelIndex + 1];
-          const b = imageData[pixelIndex + 2];
+      for (let sy = -sampleRadius; sy <= sampleRadius; sy++) {
+        for (let sx = -sampleRadius; sx <= sampleRadius; sx++) {
+          const sampleX = Math.floor(centerX + sx);
+          const sampleY = Math.floor(centerY + sy);
           
-          const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-          totalLuminance += luminance;
-          sampleCount++;
+          if (sampleX >= 0 && sampleX < width && sampleY >= 0 && sampleY < height) {
+            const pixelIndex = (sampleY * width + sampleX) * 4;
+            const r = imageData[pixelIndex];
+            const g = imageData[pixelIndex + 1];
+            const b = imageData[pixelIndex + 2];
+            
+            const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            totalLuminance += luminance;
+            sampleCount++;
+          }
         }
       }
       
@@ -72,35 +92,19 @@ const applyHalftoneEffect = (
         
         // Normalize luminance with auto-contrast
         let normalizedLuminance = Math.max(0, Math.min(1, (avgLuminance - minLuminance) / luminanceRange));
-        normalizedLuminance = enhanceContrast(normalizedLuminance);
         
-        const centerX = startX + cellSize / 2;
-        const centerY = startY + cellSize / 2;
+        // Apply gentle contrast enhancement for newspaper effect
+        normalizedLuminance = Math.pow(normalizedLuminance, 1.2);
         
-        // Screen printing logic: solid blocks for extremes, halftone for midtones
-        if (normalizedLuminance <= shadowThreshold) {
-          // Solid shadow block - no dots needed, background is already shadow color
-          continue;
-        } else if (normalizedLuminance >= highlightThreshold) {
-          // Solid highlight block
-          ctx.fillStyle = `rgb(${highlightColor.r}, ${highlightColor.g}, ${highlightColor.b})`;
-          ctx.fillRect(startX, startY, endX - startX, endY - startY);
-        } else {
-          // Halftone area - dots for gradation
-          ctx.fillStyle = `rgb(${highlightColor.r}, ${highlightColor.g}, ${highlightColor.b})`;
-          
-          // Map midtone range to dot size (0.2-0.8 maps to 0-1)
-          const midtoneRange = highlightThreshold - shadowThreshold;
-          const midtonePosition = (normalizedLuminance - shadowThreshold) / midtoneRange;
-          
-          const dotSize = midtonePosition * maxDotSize;
-          const radius = dotSize / 2;
-          
-          if (radius > 1) {
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-            ctx.fill();
-          }
+        // Calculate dot size - newspaper style with fuller range
+        const dotSize = normalizedLuminance * maxDotSize;
+        const radius = dotSize / 2;
+        
+        // Draw dot if visible
+        if (radius > 0.3) {
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+          ctx.fill();
         }
       }
     }
