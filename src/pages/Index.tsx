@@ -229,15 +229,7 @@ const Index = () => {
           </p>
           <p className="text-xs text-muted-foreground/70 mt-1">
             enhanced with professional rasterization by{" "}
-            <a 
-              href="https://azharazziz.github.io" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-primary hover:text-primary/80 transition-colors underline"
-            >
-              azharazziz
-            </a>{" "}
-            & <span className="text-primary font-medium">GitHub Copilot</span>
+            <span className="text-primary font-medium">GitHub Copilot</span>
           </p>
         </footer>
         
