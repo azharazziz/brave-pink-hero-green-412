@@ -26,6 +26,68 @@ const enhanceContrast = (value: number): number => {
   }
 };
 
+// Halftone effect function - creates dot pattern based on luminance
+const applyHalftoneEffect = (
+  ctx: CanvasRenderingContext2D,
+  imageData: Uint8ClampedArray,
+  width: number,
+  height: number,
+  shadowColor: { r: number; g: number; b: number },
+  highlightColor: { r: number; g: number; b: number },
+  minLuminance: number,
+  luminanceRange: number
+) => {
+  const dotSize = 8; // Base dot size in pixels
+  const spacing = dotSize; // Space between dot centers
+  
+  // Set highlight color for dots
+  ctx.fillStyle = `rgb(${highlightColor.r}, ${highlightColor.g}, ${highlightColor.b})`;
+  
+  // Process image in a grid pattern
+  for (let y = 0; y < height; y += spacing) {
+    for (let x = 0; x < width; x += spacing) {
+      // Calculate average luminance in this cell
+      let totalLuminance = 0;
+      let pixelCount = 0;
+      
+      // Sample pixels in the current grid cell
+      for (let dy = 0; dy < spacing && y + dy < height; dy++) {
+        for (let dx = 0; dx < spacing && x + dx < width; dx++) {
+          const pixelIndex = ((y + dy) * width + (x + dx)) * 4;
+          if (pixelIndex < imageData.length) {
+            const r = imageData[pixelIndex];
+            const g = imageData[pixelIndex + 1];
+            const b = imageData[pixelIndex + 2];
+            
+            const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            totalLuminance += luminance;
+            pixelCount++;
+          }
+        }
+      }
+      
+      if (pixelCount > 0) {
+        const avgLuminance = totalLuminance / pixelCount;
+        
+        // Normalize and enhance contrast
+        let normalizedLuminance = Math.max(0, Math.min(1, (avgLuminance - minLuminance) / luminanceRange));
+        normalizedLuminance = enhanceContrast(normalizedLuminance);
+        
+        // Calculate dot radius based on luminance (brighter = larger dots)
+        const maxRadius = dotSize / 2;
+        const dotRadius = normalizedLuminance * maxRadius;
+        
+        // Draw the dot if it has significant size
+        if (dotRadius > 0.5) {
+          ctx.beginPath();
+          ctx.arc(x + spacing/2, y + spacing/2, dotRadius, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      }
+    }
+  }
+};
+
 interface ProcessingResult {
   processedCanvas: HTMLCanvasElement;
   dimensions: { width: number; height: number };
@@ -35,7 +97,8 @@ export const processDuotoneImage = async (
   file: File, 
   canvas: HTMLCanvasElement,
   isReversed: boolean = false,
-  useClassicColors: boolean = false
+  useClassicColors: boolean = false,
+  useHalftone: boolean = false
 ): Promise<ProcessingResult> => {
   return new Promise((resolve, reject) => {
     // Create image element to load the file
@@ -45,7 +108,7 @@ export const processDuotoneImage = async (
     img.onload = () => {
       URL.revokeObjectURL(url);
       try {
-        const result = processImageOnCanvas(img, canvas, isReversed, useClassicColors);
+        const result = processImageOnCanvas(img, canvas, isReversed, useClassicColors, useHalftone);
         resolve(result);
       } catch (error) {
         reject(error);
@@ -62,7 +125,7 @@ export const processDuotoneImage = async (
   });
 };
 
-const processImageOnCanvas = (img: HTMLImageElement, canvas: HTMLCanvasElement, isReversed: boolean = false, useClassicColors: boolean = false): ProcessingResult => {
+const processImageOnCanvas = (img: HTMLImageElement, canvas: HTMLCanvasElement, isReversed: boolean = false, useClassicColors: boolean = false, useHalftone: boolean = false): ProcessingResult => {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) {
     throw new Error("Could not get canvas context");
@@ -110,31 +173,41 @@ const processImageOnCanvas = (img: HTMLImageElement, canvas: HTMLCanvasElement, 
   const shadowColor = isReversed ? baseColors.highlight : baseColors.shadow;
   const highlightColor = isReversed ? baseColors.shadow : baseColors.highlight;
   
-  // Step 2: Apply duotone effect with enhanced contrast
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
+  // Step 2: Apply duotone effect with enhanced contrast or halftone
+  if (useHalftone) {
+    // Clear canvas to background color
+    ctx.fillStyle = `rgb(${shadowColor.r}, ${shadowColor.g}, ${shadowColor.b})`;
+    ctx.fillRect(0, 0, width, height);
     
-    // Recalculate luminance for this pixel
-    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    // Apply halftone effect
+    applyHalftoneEffect(ctx, data, width, height, shadowColor, highlightColor, minLuminance, luminanceRange);
+  } else {
+    // Regular duotone processing
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      
+      // Recalculate luminance for this pixel
+      const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      
+      // Normalize luminance with auto-contrast (stretch to 0-1 range)
+      let normalizedLuminance = Math.max(0, Math.min(1, (luminance - minLuminance) / luminanceRange));
+      
+      // Apply contrast enhancement curve (S-curve) to push values toward extremes
+      // This makes shadows darker and highlights brighter for stronger duotone effect
+      normalizedLuminance = enhanceContrast(normalizedLuminance);
+      
+      // Map to duotone colors
+      data[i] = Math.round(shadowColor.r + normalizedLuminance * (highlightColor.r - shadowColor.r));     // R
+      data[i + 1] = Math.round(shadowColor.g + normalizedLuminance * (highlightColor.g - shadowColor.g)); // G
+      data[i + 2] = Math.round(shadowColor.b + normalizedLuminance * (highlightColor.b - shadowColor.b)); // B
+      // Alpha channel (i + 3) remains unchanged
+    }
     
-    // Normalize luminance with auto-contrast (stretch to 0-1 range)
-    let normalizedLuminance = Math.max(0, Math.min(1, (luminance - minLuminance) / luminanceRange));
-    
-    // Apply contrast enhancement curve (S-curve) to push values toward extremes
-    // This makes shadows darker and highlights brighter for stronger duotone effect
-    normalizedLuminance = enhanceContrast(normalizedLuminance);
-    
-    // Map to duotone colors
-    data[i] = Math.round(shadowColor.r + normalizedLuminance * (highlightColor.r - shadowColor.r));     // R
-    data[i + 1] = Math.round(shadowColor.g + normalizedLuminance * (highlightColor.g - shadowColor.g)); // G
-    data[i + 2] = Math.round(shadowColor.b + normalizedLuminance * (highlightColor.b - shadowColor.b)); // B
-    // Alpha channel (i + 3) remains unchanged
+    // Put the processed image data back
+    ctx.putImageData(imageData, 0, 0);
   }
-  
-  // Put the processed image data back
-  ctx.putImageData(imageData, 0, 0);
   
   return {
     processedCanvas: canvas,

@@ -6,6 +6,7 @@ import { DuotoneCanvas } from "@/components/DuotoneCanvas";
 import { ActionsBar } from "@/components/ActionsBar";
 import { ReverseToggle } from "@/components/ReverseToggle";
 import { ColorToggle } from "@/components/ColorToggle";
+import { HalftoneToggle } from "@/components/HalftoneToggle";
 import { Card } from "@/components/ui/card";
 
 interface ProcessedImage {
@@ -21,10 +22,12 @@ const Index = () => {
   const [error, setError] = useState<string | null>(null);
   const [isReversed, setIsReversed] = useState(false);
   const [useClassicColors, setUseClassicColors] = useState(false);
+  const [useHalftone, setUseHalftone] = useState(false);
   
   // Debounce the controls to prevent excessive processing
   const [debouncedIsReversed] = useDebounce(isReversed, 200);
   const [debouncedUseClassicColors] = useDebounce(useClassicColors, 200);
+  const [debouncedUseHalftone] = useDebounce(useHalftone, 200);
 
   const handleFileSelect = useCallback((file: File) => {
     setError(null);
@@ -45,6 +48,10 @@ const Index = () => {
 
   const handleColorToggle = useCallback((useClassic: boolean) => {
     setUseClassicColors(useClassic);
+  }, []);
+
+  const handleHalftoneToggle = useCallback((checked: boolean) => {
+    setUseHalftone(checked);
   }, []);
 
   const handleProcessingComplete = useCallback((url: string, dimensions: { width: number; height: number }) => {
@@ -80,6 +87,7 @@ const Index = () => {
     setIsProcessing(false);
     setIsReversed(false);
     setUseClassicColors(false);
+    setUseHalftone(false);
   }, []);
 
   // Cleanup on unmount
@@ -106,10 +114,10 @@ const Index = () => {
             Pink × Green duotone. Local & private.
           </p>
           <p className="text-sm text-muted-foreground mt-2 px-2">
-            Transform your photos with beautiful duotone effects. All processing happens in your browser.
+            Transform your photos with beautiful duotone effects and halftone patterns. All processing happens in your browser.
           </p>
           <p className="text-sm text-muted-foreground mt-1 px-2">
-            Now color-blind friendly — switch to classic if you prefer the original look.
+            Now with halftone gradation for comic book style effects — color-blind friendly options available.
           </p>
         </header>
 
@@ -145,6 +153,7 @@ const Index = () => {
                   isProcessing={isProcessing}
                   isReversed={debouncedIsReversed}
                   useClassicColors={debouncedUseClassicColors}
+                  useHalftone={debouncedUseHalftone}
                 />
               </Card>
               
@@ -154,6 +163,11 @@ const Index = () => {
                   <ColorToggle
                     useClassicColors={useClassicColors}
                     onToggle={handleColorToggle}
+                    disabled={isProcessing}
+                  />
+                  <HalftoneToggle
+                    checked={useHalftone}
+                    onCheckedChange={handleHalftoneToggle}
                     disabled={isProcessing}
                   />
                   <ReverseToggle
