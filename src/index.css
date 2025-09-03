@@ -1,0 +1,149 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Brave Pink Hero Green 1312 Design System */
+
+@layer base {
+  :root {
+    /* Background and surface colors */
+    --background: 210 20% 98%;
+    --foreground: 160 10% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 160 10% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 160 10% 15%;
+
+    /* Brand colors - Pink Highlight & Green Shadow */
+    --primary: 327 89% 74%; /* #f784c5 - Pink highlight */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 150 56% 24%; /* #1b602f - Green shadow */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 210 15% 96%;
+    --muted-foreground: 160 8% 50%;
+
+    --accent: 327 89% 74%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 15% 90%;
+    --input: 210 15% 92%;
+    --ring: 327 89% 74%;
+
+    --radius: 0.5rem;
+
+    /* Custom gradients and effects for duotone app */
+    --gradient-duotone: linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--primary)));
+    --gradient-surface: linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted)));
+    --shadow-card: 0 4px 20px -2px hsl(var(--primary) / 0.1);
+    --shadow-drop: 0 10px 40px -10px hsl(var(--secondary) / 0.2);
+  }
+
+  .dark {
+    --background: 160 15% 8%;
+    --foreground: 210 20% 95%;
+
+    --card: 160 10% 12%;
+    --card-foreground: 210 20% 95%;
+
+    --primary: 327 89% 74%;
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 150 56% 24%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 160 8% 15%;
+    --muted-foreground: 160 5% 65%;
+
+    --border: 160 8% 20%;
+    --input: 160 8% 18%;
+    --ring: 327 89% 74%;
+
+    --shadow-card: 0 4px 20px -2px hsl(0 0% 0% / 0.3);
+    --shadow-drop: 0 10px 40px -10px hsl(0 0% 0% / 0.4);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Mobile safe area support */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Custom animations for the duotone app */
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient 3s ease infinite;
+  }
+
+  @keyframes gradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Drop zone styles */
+  .drop-zone {
+    @apply border-2 border-dashed border-border rounded-lg p-4 sm:p-8 text-center transition-all duration-200;
+  }
+
+  .drop-zone.drag-over {
+    @apply border-primary bg-primary/5 scale-[1.02];
+  }
+
+  .processing-overlay {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--primary) / 0.1),
+      transparent
+    );
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* Mobile optimizations */
+  @media (max-width: 480px) {
+    .container {
+      @apply px-2;
+    }
+    
+    /* Ensure touch targets are at least 44px */
+    button, [role="button"], input[type="checkbox"], input[type="radio"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    
+    /* Prevent horizontal scroll */
+    body {
+      overflow-x: hidden;
+    }
+  }
+}
