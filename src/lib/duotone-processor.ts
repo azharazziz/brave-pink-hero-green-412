@@ -26,7 +26,7 @@ const enhanceContrast = (value: number): number => {
   }
 };
 
-// Halftone effect function - creates dot pattern based on luminance
+// Halftone raster effect function - creates structured dot pattern
 const applyHalftoneEffect = (
   ctx: CanvasRenderingContext2D,
   imageData: Uint8ClampedArray,
@@ -37,50 +37,62 @@ const applyHalftoneEffect = (
   minLuminance: number,
   luminanceRange: number
 ) => {
-  const dotSize = 8; // Base dot size in pixels
-  const spacing = dotSize; // Space between dot centers
+  const cellSize = 12; // Size of each raster cell
+  const maxDotSize = cellSize * 0.8; // Maximum dot diameter
+  const minDotSize = 1; // Minimum dot diameter
   
   // Set highlight color for dots
   ctx.fillStyle = `rgb(${highlightColor.r}, ${highlightColor.g}, ${highlightColor.b})`;
   
-  // Process image in a grid pattern
-  for (let y = 0; y < height; y += spacing) {
-    for (let x = 0; x < width; x += spacing) {
-      // Calculate average luminance in this cell
-      let totalLuminance = 0;
-      let pixelCount = 0;
+  // Create raster pattern with regular grid
+  for (let gridY = 0; gridY < Math.ceil(height / cellSize); gridY++) {
+    for (let gridX = 0; gridX < Math.ceil(width / cellSize); gridX++) {
+      const centerX = gridX * cellSize + cellSize / 2;
+      const centerY = gridY * cellSize + cellSize / 2;
       
-      // Sample pixels in the current grid cell
-      for (let dy = 0; dy < spacing && y + dy < height; dy++) {
-        for (let dx = 0; dx < spacing && x + dx < width; dx++) {
-          const pixelIndex = ((y + dy) * width + (x + dx)) * 4;
-          if (pixelIndex < imageData.length) {
+      // Skip if center is outside canvas
+      if (centerX >= width || centerY >= height) continue;
+      
+      // Sample luminance at cell center and surrounding area
+      let totalLuminance = 0;
+      let sampleCount = 0;
+      const sampleRadius = Math.floor(cellSize / 3);
+      
+      for (let sy = -sampleRadius; sy <= sampleRadius; sy++) {
+        for (let sx = -sampleRadius; sx <= sampleRadius; sx++) {
+          const sampleX = Math.floor(centerX + sx);
+          const sampleY = Math.floor(centerY + sy);
+          
+          if (sampleX >= 0 && sampleX < width && sampleY >= 0 && sampleY < height) {
+            const pixelIndex = (sampleY * width + sampleX) * 4;
             const r = imageData[pixelIndex];
             const g = imageData[pixelIndex + 1];
             const b = imageData[pixelIndex + 2];
             
             const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
             totalLuminance += luminance;
-            pixelCount++;
+            sampleCount++;
           }
         }
       }
       
-      if (pixelCount > 0) {
-        const avgLuminance = totalLuminance / pixelCount;
+      if (sampleCount > 0) {
+        const avgLuminance = totalLuminance / sampleCount;
         
-        // Normalize and enhance contrast
+        // Normalize luminance with auto-contrast
         let normalizedLuminance = Math.max(0, Math.min(1, (avgLuminance - minLuminance) / luminanceRange));
+        
+        // Apply contrast enhancement for better raster effect
         normalizedLuminance = enhanceContrast(normalizedLuminance);
         
-        // Calculate dot radius based on luminance (brighter = larger dots)
-        const maxRadius = dotSize / 2;
-        const dotRadius = normalizedLuminance * maxRadius;
+        // Calculate dot size based on luminance - higher luminance = larger dots
+        const dotSize = minDotSize + normalizedLuminance * (maxDotSize - minDotSize);
+        const radius = dotSize / 2;
         
-        // Draw the dot if it has significant size
-        if (dotRadius > 0.5) {
+        // Draw circular dot with precise positioning
+        if (radius > 0.5) {
           ctx.beginPath();
-          ctx.arc(x + spacing/2, y + spacing/2, dotRadius, 0, 2 * Math.PI);
+          ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
           ctx.fill();
         }
       }
