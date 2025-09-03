@@ -7,6 +7,7 @@ import { ActionsBar } from "@/components/ActionsBar";
 import { ReverseToggle } from "@/components/ReverseToggle";
 import { ColorToggle } from "@/components/ColorToggle";
 import { HalftoneToggle } from "@/components/HalftoneToggle";
+import { RasterAdjustments } from "@/components/RasterAdjustments";
 import { Card } from "@/components/ui/card";
 
 interface ProcessedImage {
@@ -22,12 +23,18 @@ const Index = () => {
   const [error, setError] = useState<string | null>(null);
   const [isReversed, setIsReversed] = useState(false);
   const [useClassicColors, setUseClassicColors] = useState(false);
-  const [useHalftone, setUseHalftone] = useState(false);
+  const [useHalftone, setUseHalftone] = useState(false); // Default to raster mode (switch OFF)
+  const [rasterSettings, setRasterSettings] = useState({
+    brightness: 1.3,
+    contrast: 1.0,
+    cellSize: 8
+  });
   
   // Debounce the controls to prevent excessive processing
   const [debouncedIsReversed] = useDebounce(isReversed, 200);
   const [debouncedUseClassicColors] = useDebounce(useClassicColors, 200);
   const [debouncedUseHalftone] = useDebounce(useHalftone, 200);
+  const [debouncedRasterSettings] = useDebounce(rasterSettings, 300);
 
   const handleFileSelect = useCallback((file: File) => {
     setError(null);
@@ -52,6 +59,18 @@ const Index = () => {
 
   const handleHalftoneToggle = useCallback((checked: boolean) => {
     setUseHalftone(checked);
+  }, []);
+
+  const handleBrightnessChange = useCallback((brightness: number) => {
+    setRasterSettings(prev => ({ ...prev, brightness }));
+  }, []);
+
+  const handleContrastChange = useCallback((contrast: number) => {
+    setRasterSettings(prev => ({ ...prev, contrast }));
+  }, []);
+
+  const handleCellSizeChange = useCallback((cellSize: number) => {
+    setRasterSettings(prev => ({ ...prev, cellSize }));
   }, []);
 
   const handleProcessingComplete = useCallback((url: string, dimensions: { width: number; height: number }) => {
@@ -87,7 +106,7 @@ const Index = () => {
     setIsProcessing(false);
     setIsReversed(false);
     setUseClassicColors(false);
-    setUseHalftone(false);
+    setUseHalftone(false); // Reset to default raster mode (switch OFF)
   }, []);
 
   // Cleanup on unmount
@@ -153,7 +172,8 @@ const Index = () => {
                   isProcessing={isProcessing}
                   isReversed={debouncedIsReversed}
                   useClassicColors={debouncedUseClassicColors}
-                  useHalftone={debouncedUseHalftone}
+                  useHalftone={!debouncedUseHalftone}
+                  rasterSettings={debouncedRasterSettings}
                 />
               </Card>
               
@@ -170,6 +190,17 @@ const Index = () => {
                     onCheckedChange={handleHalftoneToggle}
                     disabled={isProcessing}
                   />
+                  {!useHalftone && (
+                    <RasterAdjustments
+                      brightness={rasterSettings.brightness}
+                      contrast={rasterSettings.contrast}
+                      cellSize={rasterSettings.cellSize}
+                      onBrightnessChange={handleBrightnessChange}
+                      onContrastChange={handleContrastChange}
+                      onCellSizeChange={handleCellSizeChange}
+                      disabled={isProcessing}
+                    />
+                  )}
                   <ReverseToggle
                     checked={isReversed}
                     onCheckedChange={handleReverseToggle}
@@ -187,7 +218,7 @@ const Index = () => {
             All processing happens locally in your browser. Your photos never leave your device.
           </p>
           <p className="text-xs text-muted-foreground/70 mt-2">
-            developed by <a 
+            originally developed by <a 
               href="https://instagram.com/marjono__" 
               target="_blank" 
               rel="noopener noreferrer"
@@ -196,33 +227,51 @@ const Index = () => {
               marjono
             </a>
           </p>
+          <p className="text-xs text-muted-foreground/70 mt-1">
+            enhanced with professional rasterization by{" "}
+            <a 
+              href="https://azharazziz.github.io" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:text-primary/80 transition-colors underline"
+            >
+              azharazziz
+            </a>{" "}
+            & <span className="text-primary font-medium">GitHub Copilot</span>
+          </p>
         </footer>
         
-        {/* Mobile spacer to prevent sticky download from covering footer */}
-        <div className="h-20 sm:hidden" aria-hidden="true" />
+        {/* Mobile spacer to prevent sticky action bar from covering content */}
+        {processedImage && <div className="h-24 sm:hidden" aria-hidden="true" />}
       </div>
 
-      {/* Sticky bottom bar for mobile */}
+      {/* Sticky bottom action bar for mobile */}
       {processedImage && (
-        <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border pb-safe sm:hidden">
-          <div className="p-4 pb-6">
-            <ActionsBar
-              processedImage={processedImage}
-              onReset={handleReset}
-              isMobile={true}
-            />
+        <div className="fixed bottom-0 left-0 right-0 z-50 sm:hidden">
+          <div className="bg-background/98 backdrop-blur-md border-t border-border shadow-2xl">
+            <div className="p-4 pb-safe">
+              <ActionsBar
+                processedImage={processedImage}
+                onReset={handleReset}
+                isMobile={true}
+              />
+            </div>
           </div>
         </div>
       )}
 
-      {/* Desktop actions */}
+      {/* Desktop floating action bar */}
       {processedImage && (
-        <div className="hidden sm:block">
-          <ActionsBar
-            processedImage={processedImage}
-            onReset={handleReset}
-            isMobile={false}
-          />
+        <div className="hidden sm:block fixed bottom-6 right-6 z-50">
+          <Card className="shadow-2xl border-2 bg-background/98 backdrop-blur-md ring-1 ring-border/50 animate-in slide-in-from-bottom-2 duration-300">
+            <div className="p-4">
+              <ActionsBar
+                processedImage={processedImage}
+                onReset={handleReset}
+                isMobile={false}
+              />
+            </div>
+          </Card>
         </div>
       )}
     </div>

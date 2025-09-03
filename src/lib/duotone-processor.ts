@@ -26,89 +26,171 @@ const enhanceContrast = (value: number): number => {
   }
 };
 
-// Newspaper halftone effect function - fine dots with angled screen
-const applyHalftoneEffect = (
+// Professional rasterization pipeline with joined areas - follows traditional printing workflow
+const applyRasterizationPipeline = (
   ctx: CanvasRenderingContext2D,
-  imageData: Uint8ClampedArray,
+  originalImageData: Uint8ClampedArray,
   width: number,
   height: number,
   shadowColor: { r: number; g: number; b: number },
   highlightColor: { r: number; g: number; b: number },
   minLuminance: number,
-  luminanceRange: number
+  luminanceRange: number,
+  brightness: number = 1.3,
+  contrast: number = 1.0,
+  cellSize: number = 8
 ) => {
-  const cellSize = 6; // Smaller cells for finer newspaper effect
-  const maxDotSize = cellSize * 0.95; // Nearly full cell size
-  const angle = Math.PI / 6; // 30 degree rotation for newspaper effect
+  // Step 1: Create grayscale array for level adjustment
+  const grayscaleData = new Float32Array(width * height);
+  
+  // Convert to grayscale
+  for (let i = 0; i < originalImageData.length; i += 4) {
+    const r = originalImageData[i];
+    const g = originalImageData[i + 1];
+    const b = originalImageData[i + 2];
+    
+    // Calculate luminance using Rec. 709 formula
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const pixelIndex = Math.floor(i / 4);
+    grayscaleData[pixelIndex] = luminance;
+  }
+  
+  // Step 2: Adjust levels for brighter, clearer view
+  const adjustedGrayscale = new Float32Array(width * height);
+  for (let i = 0; i < grayscaleData.length; i++) {
+    const originalValue = grayscaleData[i];
+    
+    // Normalize to 0-1 range with auto-contrast
+    let normalized = Math.max(0, Math.min(1, (originalValue - minLuminance) / luminanceRange));
+    
+    // Apply adjustable brightness boost for clearer visibility
+    normalized = normalized * brightness; // Use adjustable brightness
+    normalized = Math.max(0, Math.min(1, normalized)); // Clamp to valid range
+    
+    // Apply enhanced contrast for cleaner separation
+    normalized = enhanceContrast(normalized);
+    
+    // Apply additional contrast adjustment
+    normalized = Math.pow(normalized, 1 / contrast); // Use adjustable contrast
+    
+    // Apply optimized levels adjustment for clearer view
+    // Adjusted shadows and highlights for better visibility
+    const shadows = 0.05; // Lower shadow threshold for more detail
+    const highlights = 0.95; // Higher highlight threshold for brighter whites
+    const gamma = 0.8; // Lower gamma for brighter midtones
+    
+    // Adjust input range with improved settings
+    normalized = Math.max(0, Math.min(1, (normalized - shadows) / (highlights - shadows)));
+    
+    // Apply gamma correction for brighter midtones
+    normalized = Math.pow(normalized, 1 / gamma);
+    
+    // Additional brightness boost in post-processing
+    normalized = normalized * 1.1 + 0.05; // Slight lift and boost
+    normalized = Math.max(0, Math.min(1, normalized)); // Final clamp
+    
+    adjustedGrayscale[i] = normalized * 255;
+  }
+  // Step 3: Create 45-degree raster pattern with joined areas
+  const angle = Math.PI / 4; // 45 degrees for diamond orientation
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   
-  // Set highlight color for dots
-  ctx.fillStyle = `rgb(${highlightColor.r}, ${highlightColor.g}, ${highlightColor.b})`;
+  // Clear canvas to shadow color (background)
+  ctx.fillStyle = `rgb(${shadowColor.r}, ${shadowColor.g}, ${shadowColor.b})`;
+  ctx.fillRect(0, 0, width, height);
   
-  // Calculate rotated grid bounds
-  const diagonal = Math.sqrt(width * width + height * height);
-  const gridSize = Math.ceil(diagonal / cellSize) + 2;
+  // Create a threshold map to determine which areas should be highlight color
+  const thresholdMap = new Uint8Array(width * height);
+  const threshold = 127; // Mid-point threshold
   
-  // Create angled halftone pattern like newspaper
-  for (let gridY = -gridSize; gridY < gridSize; gridY++) {
-    for (let gridX = -gridSize; gridX < gridSize; gridX++) {
-      // Calculate rotated grid position
-      const rotatedX = gridX * cellSize * cos - gridY * cellSize * sin;
-      const rotatedY = gridX * cellSize * sin + gridY * cellSize * cos;
+  // First pass: Create threshold map based on adjusted grayscale
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const pixelIndex = y * width + x;
+      const value = adjustedGrayscale[pixelIndex];
       
-      // Center position in original image coordinates
-      const centerX = rotatedX + width / 2;
-      const centerY = rotatedY + height / 2;
+      // Determine if this pixel should be highlight color based on raster pattern
+      const rotatedX = (x - width / 2) * cos + (y - height / 2) * sin;
+      const rotatedY = -(x - width / 2) * sin + (y - height / 2) * cos;
       
-      // Skip if center is outside image bounds
-      if (centerX < 0 || centerX >= width || centerY < 0 || centerY >= height) continue;
+      const gridX = Math.floor(rotatedX / cellSize);
+      const gridY = Math.floor(rotatedY / cellSize);
       
-      // Sample area around center for luminance
-      let totalLuminance = 0;
-      let sampleCount = 0;
-      const sampleRadius = Math.max(1, Math.floor(cellSize / 2));
+      // Create raster pattern based on grid position and luminance
+      const cellOffsetX = rotatedX - gridX * cellSize;
+      const cellOffsetY = rotatedY - gridY * cellSize;
+      const distFromCenter = Math.sqrt(
+        Math.pow(cellOffsetX - cellSize / 2, 2) + 
+        Math.pow(cellOffsetY - cellSize / 2, 2)
+      );
       
-      for (let sy = -sampleRadius; sy <= sampleRadius; sy++) {
-        for (let sx = -sampleRadius; sx <= sampleRadius; sx++) {
-          const sampleX = Math.floor(centerX + sx);
-          const sampleY = Math.floor(centerY + sy);
+      // Use luminance to determine raster size within cell
+      const normalizedValue = value / 255;
+      const rasterRadius = (normalizedValue * cellSize) / 2;
+      
+      // Mark pixel as highlight if it's within the raster area for this luminance
+      thresholdMap[pixelIndex] = (distFromCenter <= rasterRadius) ? 1 : 0;
+    }
+  }
+  
+  // Second pass: Apply morphological operations to join nearby areas
+  const joinedMap = new Uint8Array(width * height);
+  const kernelSize = Math.max(1, Math.floor(cellSize / 4)); // Size for joining nearby areas
+  
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const pixelIndex = y * width + x;
+      let highlightCount = 0;
+      let totalCount = 0;
+      
+      // Sample area around pixel
+      for (let dy = -kernelSize; dy <= kernelSize; dy++) {
+        for (let dx = -kernelSize; dx <= kernelSize; dx++) {
+          const sampleX = x + dx;
+          const sampleY = y + dy;
           
           if (sampleX >= 0 && sampleX < width && sampleY >= 0 && sampleY < height) {
-            const pixelIndex = (sampleY * width + sampleX) * 4;
-            const r = imageData[pixelIndex];
-            const g = imageData[pixelIndex + 1];
-            const b = imageData[pixelIndex + 2];
-            
-            const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-            totalLuminance += luminance;
-            sampleCount++;
+            const sampleIndex = sampleY * width + sampleX;
+            if (thresholdMap[sampleIndex] === 1) highlightCount++;
+            totalCount++;
           }
         }
       }
       
-      if (sampleCount > 0) {
-        const avgLuminance = totalLuminance / sampleCount;
-        
-        // Normalize luminance with auto-contrast
-        let normalizedLuminance = Math.max(0, Math.min(1, (avgLuminance - minLuminance) / luminanceRange));
-        
-        // Apply gentle contrast enhancement for newspaper effect
-        normalizedLuminance = Math.pow(normalizedLuminance, 1.2);
-        
-        // Calculate dot size - newspaper style with fuller range
-        const dotSize = normalizedLuminance * maxDotSize;
-        const radius = dotSize / 2;
-        
-        // Draw dot if visible
-        if (radius > 0.3) {
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-          ctx.fill();
-        }
+      // Join areas if enough neighboring pixels are highlight
+      const ratio = highlightCount / totalCount;
+      joinedMap[pixelIndex] = ratio > 0.3 ? 1 : 0; // 30% threshold for joining
+    }
+  }
+  
+  // Third pass: Render the joined areas
+  const outputImageData = ctx.createImageData(width, height);
+  const outputData = outputImageData.data;
+  
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const pixelIndex = y * width + x;
+      const dataIndex = pixelIndex * 4;
+      
+      if (joinedMap[pixelIndex] === 1) {
+        // Highlight color (pink/green)
+        outputData[dataIndex] = highlightColor.r;
+        outputData[dataIndex + 1] = highlightColor.g;
+        outputData[dataIndex + 2] = highlightColor.b;
+        outputData[dataIndex + 3] = 255;
+      } else {
+        // Shadow color (green/pink)
+        outputData[dataIndex] = shadowColor.r;
+        outputData[dataIndex + 1] = shadowColor.g;
+        outputData[dataIndex + 2] = shadowColor.b;
+        outputData[dataIndex + 3] = 255;
       }
     }
   }
+  
+  // Put the processed image data back
+  ctx.putImageData(outputImageData, 0, 0);
 };
 
 interface ProcessingResult {
@@ -121,7 +203,8 @@ export const processDuotoneImage = async (
   canvas: HTMLCanvasElement,
   isReversed: boolean = false,
   useClassicColors: boolean = false,
-  useHalftone: boolean = false
+  useHalftone: boolean = false,
+  rasterSettings?: { brightness: number; contrast: number; cellSize: number }
 ): Promise<ProcessingResult> => {
   return new Promise((resolve, reject) => {
     // Create image element to load the file
@@ -131,7 +214,7 @@ export const processDuotoneImage = async (
     img.onload = () => {
       URL.revokeObjectURL(url);
       try {
-        const result = processImageOnCanvas(img, canvas, isReversed, useClassicColors, useHalftone);
+        const result = processImageOnCanvas(img, canvas, isReversed, useClassicColors, useHalftone, rasterSettings);
         resolve(result);
       } catch (error) {
         reject(error);
@@ -148,7 +231,14 @@ export const processDuotoneImage = async (
   });
 };
 
-const processImageOnCanvas = (img: HTMLImageElement, canvas: HTMLCanvasElement, isReversed: boolean = false, useClassicColors: boolean = false, useHalftone: boolean = false): ProcessingResult => {
+const processImageOnCanvas = (
+  img: HTMLImageElement, 
+  canvas: HTMLCanvasElement, 
+  isReversed: boolean = false, 
+  useClassicColors: boolean = false, 
+  useHalftone: boolean = false,
+  rasterSettings?: { brightness: number; contrast: number; cellSize: number }
+): ProcessingResult => {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) {
     throw new Error("Could not get canvas context");
@@ -196,14 +286,19 @@ const processImageOnCanvas = (img: HTMLImageElement, canvas: HTMLCanvasElement, 
   const shadowColor = isReversed ? baseColors.highlight : baseColors.shadow;
   const highlightColor = isReversed ? baseColors.shadow : baseColors.highlight;
   
-  // Step 2: Apply duotone effect with enhanced contrast or halftone
+  // Step 2: Apply duotone effect with enhanced contrast or raster
   if (useHalftone) {
+    // Get raster settings with defaults
+    const brightness = rasterSettings?.brightness ?? 1.3;
+    const contrast = rasterSettings?.contrast ?? 1.0;
+    const cellSize = rasterSettings?.cellSize ?? 8;
+    
     // Clear canvas to background color
     ctx.fillStyle = `rgb(${shadowColor.r}, ${shadowColor.g}, ${shadowColor.b})`;
     ctx.fillRect(0, 0, width, height);
     
-    // Apply halftone effect
-    applyHalftoneEffect(ctx, data, width, height, shadowColor, highlightColor, minLuminance, luminanceRange);
+    // Apply rasterization pipeline with adjustable parameters
+    applyRasterizationPipeline(ctx, data, width, height, shadowColor, highlightColor, minLuminance, luminanceRange, brightness, contrast, cellSize);
   } else {
     // Regular duotone processing
     for (let i = 0; i < data.length; i += 4) {

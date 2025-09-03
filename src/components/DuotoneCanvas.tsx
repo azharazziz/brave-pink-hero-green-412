@@ -11,6 +11,7 @@ interface DuotoneCanvasProps {
   isReversed?: boolean;
   useClassicColors?: boolean;
   useHalftone?: boolean;
+  rasterSettings?: { brightness: number; contrast: number; cellSize: number };
 }
 
 export const DuotoneCanvas = ({ 
@@ -20,7 +21,8 @@ export const DuotoneCanvas = ({
   isProcessing,
   isReversed = false,
   useClassicColors = false,
-  useHalftone = false
+  useHalftone = false,
+  rasterSettings
 }: DuotoneCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -36,7 +38,7 @@ export const DuotoneCanvas = ({
       if (!canvas || !file || cancelled) return;
 
       try {
-        const { processedCanvas, dimensions } = await processDuotoneImage(file, canvas, isReversed, useClassicColors, useHalftone);
+        const { processedCanvas, dimensions } = await processDuotoneImage(file, canvas, isReversed, useClassicColors, useHalftone, rasterSettings);
         
         if (cancelled) return;
         
@@ -60,7 +62,7 @@ export const DuotoneCanvas = ({
     return () => {
       cancelled = true;
     };
-  }, [file, isReversed, useClassicColors, useHalftone, stableOnProcessingComplete, stableOnProcessingError]);
+  }, [file, isReversed, useClassicColors, useHalftone, rasterSettings, stableOnProcessingComplete, stableOnProcessingError]);
 
   return (
     <div className="space-y-4">
@@ -77,7 +79,7 @@ export const DuotoneCanvas = ({
             <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-3 text-muted-foreground px-4 text-center">
               <Loader2 className="w-6 h-6 animate-spin flex-shrink-0" />
               <span className="font-medium text-sm sm:text-base">
-                Applying {useHalftone ? 'halftone duotone' : 'duotone'} effect...
+                Applying {useHalftone ? 'professional raster' : 'duotone'} effect...
               </span>
             </div>
           </div>
@@ -96,7 +98,7 @@ export const DuotoneCanvas = ({
 
       {!isProcessing && (
         <div className="text-center text-sm text-muted-foreground px-2">
-          <p>✨ {useHalftone ? 'Halftone duotone' : 'Duotone'} effect applied with {isReversed ? 'pink shadows and green highlights' : 'green shadows and pink highlights'}</p>
+          <p>✨ {useHalftone ? 'Professional raster' : 'Duotone'} effect applied with {isReversed ? 'pink shadows and green highlights' : 'green shadows and pink highlights'}</p>
         </div>
       )}
     </div>
