@@ -26,7 +26,7 @@ const enhanceContrast = (value: number): number => {
   }
 };
 
-// Halftone raster effect function - creates structured dot pattern
+// Halftone raster effect function - screen printing style with solid blocks
 const applyHalftoneEffect = (
   ctx: CanvasRenderingContext2D,
   imageData: Uint8ClampedArray,
@@ -38,41 +38,32 @@ const applyHalftoneEffect = (
   luminanceRange: number
 ) => {
   const cellSize = 12; // Size of each raster cell
-  const maxDotSize = cellSize * 0.8; // Maximum dot diameter
-  const minDotSize = 1; // Minimum dot diameter
-  
-  // Set highlight color for dots
-  ctx.fillStyle = `rgb(${highlightColor.r}, ${highlightColor.g}, ${highlightColor.b})`;
+  const maxDotSize = cellSize * 0.85; // Maximum dot diameter
+  const shadowThreshold = 0.2; // Below this = solid shadow
+  const highlightThreshold = 0.8; // Above this = solid highlight
   
   // Create raster pattern with regular grid
   for (let gridY = 0; gridY < Math.ceil(height / cellSize); gridY++) {
     for (let gridX = 0; gridX < Math.ceil(width / cellSize); gridX++) {
-      const centerX = gridX * cellSize + cellSize / 2;
-      const centerY = gridY * cellSize + cellSize / 2;
+      const startX = gridX * cellSize;
+      const startY = gridY * cellSize;
+      const endX = Math.min(startX + cellSize, width);
+      const endY = Math.min(startY + cellSize, height);
       
-      // Skip if center is outside canvas
-      if (centerX >= width || centerY >= height) continue;
-      
-      // Sample luminance at cell center and surrounding area
+      // Sample luminance in this cell
       let totalLuminance = 0;
       let sampleCount = 0;
-      const sampleRadius = Math.floor(cellSize / 3);
       
-      for (let sy = -sampleRadius; sy <= sampleRadius; sy++) {
-        for (let sx = -sampleRadius; sx <= sampleRadius; sx++) {
-          const sampleX = Math.floor(centerX + sx);
-          const sampleY = Math.floor(centerY + sy);
+      for (let y = startY; y < endY; y++) {
+        for (let x = startX; x < endX; x++) {
+          const pixelIndex = (y * width + x) * 4;
+          const r = imageData[pixelIndex];
+          const g = imageData[pixelIndex + 1];
+          const b = imageData[pixelIndex + 2];
           
-          if (sampleX >= 0 && sampleX < width && sampleY >= 0 && sampleY < height) {
-            const pixelIndex = (sampleY * width + sampleX) * 4;
-            const r = imageData[pixelIndex];
-            const g = imageData[pixelIndex + 1];
-            const b = imageData[pixelIndex + 2];
-            
-            const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-            totalLuminance += luminance;
-            sampleCount++;
-          }
+          const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          totalLuminance += luminance;
+          sampleCount++;
         }
       }
       
@@ -81,19 +72,35 @@ const applyHalftoneEffect = (
         
         // Normalize luminance with auto-contrast
         let normalizedLuminance = Math.max(0, Math.min(1, (avgLuminance - minLuminance) / luminanceRange));
-        
-        // Apply contrast enhancement for better raster effect
         normalizedLuminance = enhanceContrast(normalizedLuminance);
         
-        // Calculate dot size based on luminance - higher luminance = larger dots
-        const dotSize = minDotSize + normalizedLuminance * (maxDotSize - minDotSize);
-        const radius = dotSize / 2;
+        const centerX = startX + cellSize / 2;
+        const centerY = startY + cellSize / 2;
         
-        // Draw circular dot with precise positioning
-        if (radius > 0.5) {
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-          ctx.fill();
+        // Screen printing logic: solid blocks for extremes, halftone for midtones
+        if (normalizedLuminance <= shadowThreshold) {
+          // Solid shadow block - no dots needed, background is already shadow color
+          continue;
+        } else if (normalizedLuminance >= highlightThreshold) {
+          // Solid highlight block
+          ctx.fillStyle = `rgb(${highlightColor.r}, ${highlightColor.g}, ${highlightColor.b})`;
+          ctx.fillRect(startX, startY, endX - startX, endY - startY);
+        } else {
+          // Halftone area - dots for gradation
+          ctx.fillStyle = `rgb(${highlightColor.r}, ${highlightColor.g}, ${highlightColor.b})`;
+          
+          // Map midtone range to dot size (0.2-0.8 maps to 0-1)
+          const midtoneRange = highlightThreshold - shadowThreshold;
+          const midtonePosition = (normalizedLuminance - shadowThreshold) / midtoneRange;
+          
+          const dotSize = midtonePosition * maxDotSize;
+          const radius = dotSize / 2;
+          
+          if (radius > 1) {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            ctx.fill();
+          }
         }
       }
     }
