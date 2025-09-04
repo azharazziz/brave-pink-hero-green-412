@@ -210,6 +210,21 @@ const Index = () => {
               </Card>
             </>
           )}
+
+          {/* Desktop Actions Bar - positioned after form content */}
+          {processedImage && (
+            <div className="hidden sm:block mt-6">
+              <Card className="shadow-lg border bg-background">
+                <div className="p-4">
+                  <ActionsBar
+                    processedImage={processedImage}
+                    onReset={handleReset}
+                    isMobile={false}
+                  />
+                </div>
+              </Card>
+            </div>
+          )}
         </main>
 
         {/* Footer */}
@@ -249,21 +264,6 @@ const Index = () => {
               />
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Desktop floating action bar */}
-      {processedImage && (
-        <div className="hidden sm:block fixed bottom-6 right-6 z-50">
-          <Card className="shadow-2xl border-2 bg-background/98 backdrop-blur-md ring-1 ring-border/50 animate-in slide-in-from-bottom-2 duration-300">
-            <div className="p-4">
-              <ActionsBar
-                processedImage={processedImage}
-                onReset={handleReset}
-                isMobile={false}
-              />
-            </div>
-          </Card>
         </div>
       )}
     </div>
